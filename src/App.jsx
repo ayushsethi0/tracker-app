@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react"
-import "./App.css"
+import { useState } from "react"
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+} from "react-leaflet"
+
 import L from "leaflet"
 
 import "leaflet/dist/leaflet.css"
 
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-} from "firebase/auth"
+import { db, auth } from "./firebase"
 
 import {
   doc,
@@ -19,15 +19,22 @@ import {
   getDoc,
 } from "firebase/firestore"
 
-import { auth, db } from "./firebase"
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth"
 
+// FIX MARKER ICON
 delete L.Icon.Default.prototype._getIconUrl
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+
   iconUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+
   shadowUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 })
@@ -35,59 +42,90 @@ L.Icon.Default.mergeOptions({
 function App() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+
   const [user, setUser] = useState(null)
 
-  const [position, setPosition] = useState(null)
+  // NO DEFAULT LOCATION
+  const [position, setPosition] =
+    useState(null)
 
-  const [friendEmail, setFriendEmail] = useState("")
-  const [friendLocation, setFriendLocation] = useState(null)
+  const [searchEmail, setSearchEmail] =
+    useState("")
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-    })
+  const [friendLocation, setFriendLocation] =
+    useState(null)
 
-    return () => unsubscribe()
-  }, [])
-
+  // CREATE ACCOUNT
   const createAccount = async () => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
+      const userCredential =
+        await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
+
+      setUser(userCredential.user)
+
       alert("Account Created Successfully")
     } catch (error) {
       alert(error.message)
     }
   }
 
+  // LOGIN
   const login = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential =
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
+
+      setUser(userCredential.user)
+
+      alert("Login Successful")
     } catch (error) {
       alert(error.message)
     }
   }
 
+  // LOGOUT
   const logout = async () => {
     await signOut(auth)
+
+    setUser(null)
+    setPosition(null)
+    setFriendLocation(null)
   }
 
-  const shareLocation = () => {
-    navigator.geolocation.getCurrentPosition(
+  // SHARE LOCATION
+  const getLocation = () => {
+    navigator.geolocation.watchPosition(
       async (location) => {
-        const coords = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        }
+        const latitude =
+          location.coords.latitude
 
-        setPosition([coords.latitude, coords.longitude])
+        const longitude =
+          location.coords.longitude
 
-        await setDoc(doc(db, "locations", user.email), {
-          email: user.email,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        })
+        const coords = [
+          latitude,
+          longitude,
+        ]
 
-        alert("Location Shared")
+        setPosition(coords)
+
+        await setDoc(
+          doc(db, "locations", user.email),
+          {
+            email: user.email,
+            latitude: latitude,
+            longitude: longitude,
+            updatedAt: new Date(),
+          }
+        )
       },
       () => {
         alert("Location Permission Denied")
@@ -95,54 +133,141 @@ function App() {
     )
   }
 
+  // TRACK FRIEND
   const trackFriend = async () => {
-    if (!friendEmail) {
-      alert("Enter friend's email")
-      return
-    }
+    try {
+      const docRef = doc(
+        db,
+        "locations",
+        searchEmail
+      )
 
-    const docRef = doc(db, "locations", friendEmail)
-    const docSnap = await getDoc(docRef)
+      const docSnap = await getDoc(docRef)
 
-    if (docSnap.exists()) {
-      const data = docSnap.data()
+      if (docSnap.exists()) {
+        const data = docSnap.data()
 
-      setFriendLocation([
-        data.latitude,
-        data.longitude,
-      ])
-    } else {
-      alert("No location found")
+        setFriendLocation([
+          data.latitude,
+          data.longitude,
+        ])
+
+        alert("Location Found")
+      } else {
+        alert("No user found")
+      }
+    } catch (error) {
+      alert(error.message)
     }
   }
 
+  // LOGIN SCREEN
   if (!user) {
     return (
-      <div className="auth-container">
-        <div className="auth-box">
-          <h1>TrackTogether</h1>
+      <div
+        style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #020617, #0f172a, #1e293b)",
+
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          fontFamily: "Arial",
+        }}
+      >
+        <div
+          style={{
+            width: "380px",
+            background: "#071126",
+            padding: "40px",
+            borderRadius: "28px",
+
+            boxShadow:
+              "0 0 40px rgba(0,0,0,0.5)",
+          }}
+        >
+          <h1
+            style={{
+              color: "white",
+              textAlign: "center",
+              fontSize: "48px",
+              marginBottom: "35px",
+              fontWeight: "bold",
+            }}
+          >
+            TrackTogether
+          </h1>
 
           <input
             type="email"
             placeholder="Enter email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "16px",
+              marginBottom: "18px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#111827",
+              color: "white",
+              fontSize: "15px",
+            }}
           />
 
           <input
             type="password"
             placeholder="Enter password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "16px",
+              marginBottom: "22px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#111827",
+              color: "white",
+              fontSize: "15px",
+            }}
           />
 
-          <button onClick={createAccount}>
+          <button
+            onClick={createAccount}
+            style={{
+              width: "100%",
+              padding: "15px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#2563eb",
+              color: "white",
+              fontSize: "16px",
+              fontWeight: "bold",
+              marginBottom: "14px",
+              cursor: "pointer",
+            }}
+          >
             Create Account
           </button>
 
           <button
-            className="login-btn"
             onClick={login}
+            style={{
+              width: "100%",
+              padding: "15px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#16a34a",
+              color: "white",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
           >
             Login
           </button>
@@ -151,52 +276,155 @@ function App() {
     )
   }
 
+  // MAIN APP
   return (
-    <div className="main-container">
-      <div className="top-bar">
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg, #020617, #0f172a, #1e293b)",
+
+        padding: "30px",
+        fontFamily: "Arial",
+      }}
+    >
+      {/* TOP BAR */}
+      <div
+        style={{
+          width: "90%",
+          margin: "auto",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "25px",
+        }}
+      >
         <div>
-          <h1>TrackTogether</h1>
-          <p>{user.email}</p>
+          <h1
+            style={{
+              color: "white",
+              fontSize: "64px",
+              margin: 0,
+              fontWeight: "bold",
+              lineHeight: "65px",
+            }}
+          >
+            TrackTogether
+          </h1>
+
+          <p
+            style={{
+              color: "#94a3b8",
+              marginTop: "10px",
+              fontSize: "16px",
+              marginLeft: "4px",
+            }}
+          >
+            {user.email}
+          </p>
         </div>
 
-        <div className="buttons">
-          <button onClick={shareLocation}>
+        <div
+          style={{
+            display: "flex",
+            gap: "15px",
+          }}
+        >
+          <button
+            onClick={getLocation}
+            style={{
+              padding:
+                "16px 28px",
+              borderRadius: "16px",
+              border: "none",
+              background: "#2563eb",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "15px",
+              cursor: "pointer",
+            }}
+          >
             Share Location
           </button>
 
           <button
-            className="logout-btn"
             onClick={logout}
+            style={{
+              padding:
+                "16px 28px",
+              borderRadius: "16px",
+              border: "none",
+              background: "#dc2626",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "15px",
+              cursor: "pointer",
+            }}
           >
             Logout
           </button>
         </div>
       </div>
 
-      <div className="track-box">
+      {/* SEARCH BAR */}
+      <div
+        style={{
+          width: "90%",
+          margin: "auto",
+          marginBottom: "25px",
+          display: "flex",
+          gap: "14px",
+        }}
+      >
         <input
           type="text"
           placeholder="Enter friend's email"
-          value={friendEmail}
+          value={searchEmail}
           onChange={(e) =>
-            setFriendEmail(e.target.value)
+            setSearchEmail(e.target.value)
           }
+          style={{
+            flex: 1,
+            padding: "18px",
+            borderRadius: "16px",
+            border: "none",
+            background: "#111827",
+            color: "white",
+            fontSize: "15px",
+          }}
         />
 
-        <button onClick={trackFriend}>
+        <button
+          onClick={trackFriend}
+          style={{
+            padding:
+              "18px 30px",
+            borderRadius: "16px",
+            border: "none",
+            background: "#7c3aed",
+            color: "white",
+            fontWeight: "bold",
+            cursor: "pointer",
+          }}
+        >
           Track User
         </button>
       </div>
 
+      {/* MAP */}
       {position && (
         <MapContainer
           center={position}
-          zoom={13}
+          zoom={15}
           style={{
-            height: "540px",
-            width: "100%",
+            height: "75vh",
+            width: "90%",
+            margin: "auto",
             borderRadius: "28px",
             overflow: "hidden",
+
+            boxShadow:
+              "0 0 40px rgba(0,0,0,0.4)",
           }}
         >
           <TileLayer
@@ -204,13 +432,21 @@ function App() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
+          {/* YOUR LOCATION */}
           <Marker position={position}>
-            <Popup>Your Live Location</Popup>
+            <Popup>
+              Your Live Location
+            </Popup>
           </Marker>
 
+          {/* FRIEND LOCATION */}
           {friendLocation && (
-            <Marker position={friendLocation}>
-              <Popup>Friend Location</Popup>
+            <Marker
+              position={friendLocation}
+            >
+              <Popup>
+                Friend Location
+              </Popup>
             </Marker>
           )}
         </MapContainer>
