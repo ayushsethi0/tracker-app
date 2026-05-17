@@ -445,7 +445,7 @@ function App() {
               position={friendLocation}
             >
               <Popup>
-                Friend Location
+                {searchEmail}
               </Popup>
             </Marker>
           )}
