@@ -1,380 +1,201 @@
-import { useEffect, useState } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-} from "react-leaflet";
+import { useEffect, useState } from "react"
+import "./App.css"
 
-import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet"
+import L from "leaflet"
 
-import L from "leaflet";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import "leaflet/dist/leaflet.css"
 
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  onAuthStateChanged,
   signOut,
-} from "firebase/auth";
+  onAuthStateChanged,
+} from "firebase/auth"
 
 import {
   doc,
   setDoc,
   getDoc,
-} from "firebase/firestore";
+} from "firebase/firestore"
 
-import { auth, db } from "./firebase";
+import { auth, db } from "./firebase"
 
-delete L.Icon.Default.prototype._getIconUrl;
+delete L.Icon.Default.prototype._getIconUrl
 
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+})
 
 function App() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [user, setUser] = useState(null)
 
-  const [user, setUser] = useState(null);
+  const [position, setPosition] = useState(null)
 
-  const [position, setPosition] = useState([28.6139, 77.209]);
-
-  const [friendEmail, setFriendEmail] = useState("");
-
-  const [friendLocation, setFriendLocation] = useState(null);
+  const [friendEmail, setFriendEmail] = useState("")
+  const [friendLocation, setFriendLocation] = useState(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
+      setUser(currentUser)
+    })
 
-    return () => unsubscribe();
-  }, []);
+    return () => unsubscribe()
+  }, [])
 
   const createAccount = async () => {
     try {
-      await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      alert("Account Created Successfully");
+      await createUserWithEmailAndPassword(auth, email, password)
+      alert("Account Created Successfully")
     } catch (error) {
-      alert(error.message);
+      alert(error.message)
     }
-  };
+  }
 
   const login = async () => {
     try {
-      await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      alert("Login Successful");
+      await signInWithEmailAndPassword(auth, email, password)
     } catch (error) {
-      alert(error.message);
+      alert(error.message)
     }
-  };
+  }
 
   const logout = async () => {
-    await signOut(auth);
-  };
+    await signOut(auth)
+  }
 
   const shareLocation = () => {
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const latitude = pos.coords.latitude;
-        const longitude = pos.coords.longitude;
+      async (location) => {
+        const coords = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        }
 
-        setPosition([latitude, longitude]);
+        setPosition([coords.latitude, coords.longitude])
 
         await setDoc(doc(db, "locations", user.email), {
-          latitude,
-          longitude,
           email: user.email,
-          updatedAt: new Date(),
-        });
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        })
 
-        alert("Location Shared Successfully");
+        alert("Location Shared")
       },
-      (err) => {
-        alert(err.message);
+      () => {
+        alert("Location Permission Denied")
       }
-    );
-  };
+    )
+  }
 
   const trackFriend = async () => {
     if (!friendEmail) {
-      alert("Enter friend's email");
-      return;
+      alert("Enter friend's email")
+      return
     }
 
-    const docRef = doc(db, "locations", friendEmail);
-
-    const docSnap = await getDoc(docRef);
+    const docRef = doc(db, "locations", friendEmail)
+    const docSnap = await getDoc(docRef)
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
+      const data = docSnap.data()
 
       setFriendLocation([
         data.latitude,
         data.longitude,
-      ]);
+      ])
     } else {
-      alert("Friend location not found");
+      alert("No location found")
     }
-  };
+  }
 
   if (!user) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          background:
-            "linear-gradient(to bottom right,#020617,#0f172a,#1e293b)",
-          fontFamily: "Arial",
-        }}
-      >
-        <div
-          style={{
-            width: "400px",
-            background: "#0f172a",
-            padding: "40px",
-            borderRadius: "25px",
-            boxShadow:
-              "0 0 40px rgba(0,0,0,0.5)",
-          }}
-        >
-          <h1
-            style={{
-              color: "white",
-              textAlign: "center",
-              fontSize: "48px",
-              marginBottom: "30px",
-            }}
-          >
-            TrackTogether
-          </h1>
+      <div className="auth-container">
+        <div className="auth-box">
+          <h1>TrackTogether</h1>
 
           <input
             type="email"
             placeholder="Enter email"
             value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
-            }
-            style={{
-              width: "100%",
-              padding: "15px",
-              marginBottom: "15px",
-              borderRadius: "12px",
-              border: "none",
-              background: "#1e293b",
-              color: "white",
-              fontSize: "16px",
-            }}
+            onChange={(e) => setEmail(e.target.value)}
           />
 
           <input
             type="password"
             placeholder="Enter password"
             value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
-            style={{
-              width: "100%",
-              padding: "15px",
-              marginBottom: "25px",
-              borderRadius: "12px",
-              border: "none",
-              background: "#1e293b",
-              color: "white",
-              fontSize: "16px",
-            }}
+            onChange={(e) => setPassword(e.target.value)}
           />
 
-          <button
-            onClick={createAccount}
-            style={{
-              width: "100%",
-              padding: "15px",
-              border: "none",
-              borderRadius: "12px",
-              background: "#2563eb",
-              color: "white",
-              fontSize: "18px",
-              cursor: "pointer",
-              marginBottom: "15px",
-            }}
-          >
+          <button onClick={createAccount}>
             Create Account
           </button>
 
           <button
+            className="login-btn"
             onClick={login}
-            style={{
-              width: "100%",
-              padding: "15px",
-              border: "none",
-              borderRadius: "12px",
-              background: "#16a34a",
-              color: "white",
-              fontSize: "18px",
-              cursor: "pointer",
-            }}
           >
             Login
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "linear-gradient(to bottom right,#020617,#0f172a,#1e293b)",
-        padding: "40px",
-        fontFamily: "Arial",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "30px",
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                color: "white",
-                fontSize: "72px",
-                margin: 0,
-                lineHeight: "70px",
-              }}
-            >
-              TrackTogether
-            </h1>
-
-            <p
-              style={{
-                color: "#94a3b8",
-                marginTop: "10px",
-                fontSize: "18px",
-              }}
-            >
-              {user.email}
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "15px",
-            }}
-          >
-            <button
-              onClick={shareLocation}
-              style={{
-                padding: "16px 28px",
-                borderRadius: "14px",
-                border: "none",
-                background: "#2563eb",
-                color: "white",
-                fontSize: "18px",
-                cursor: "pointer",
-              }}
-            >
-              Share Location
-            </button>
-
-            <button
-              onClick={logout}
-              style={{
-                padding: "16px 28px",
-                borderRadius: "14px",
-                border: "none",
-                background: "#dc2626",
-                color: "white",
-                fontSize: "18px",
-                cursor: "pointer",
-              }}
-            >
-              Logout
-            </button>
-          </div>
+    <div className="main-container">
+      <div className="top-bar">
+        <div>
+          <h1>TrackTogether</h1>
+          <p>{user.email}</p>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "15px",
-            marginBottom: "25px",
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Enter friend's email"
-            value={friendEmail}
-            onChange={(e) =>
-              setFriendEmail(e.target.value)
-            }
-            style={{
-              flex: 1,
-              padding: "18px",
-              borderRadius: "14px",
-              border: "none",
-              background: "#0f172a",
-              color: "white",
-              fontSize: "17px",
-            }}
-          />
+        <div className="buttons">
+          <button onClick={shareLocation}>
+            Share Location
+          </button>
 
           <button
-            onClick={trackFriend}
-            style={{
-              padding: "18px 28px",
-              borderRadius: "14px",
-              border: "none",
-              background: "#7c3aed",
-              color: "white",
-              fontSize: "17px",
-              cursor: "pointer",
-            }}
+            className="logout-btn"
+            onClick={logout}
           >
-            Track User
+            Logout
           </button>
         </div>
+      </div>
 
+      <div className="track-box">
+        <input
+          type="text"
+          placeholder="Enter friend's email"
+          value={friendEmail}
+          onChange={(e) =>
+            setFriendEmail(e.target.value)
+          }
+        />
+
+        <button onClick={trackFriend}>
+          Track User
+        </button>
+      </div>
+
+      {position && (
         <MapContainer
           center={position}
           zoom={13}
           style={{
-            height: "650px",
+            height: "540px",
             width: "100%",
-            borderRadius: "24px",
+            borderRadius: "28px",
             overflow: "hidden",
           }}
         >
@@ -393,9 +214,9 @@ function App() {
             </Marker>
           )}
         </MapContainer>
-      </div>
+      )}
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
