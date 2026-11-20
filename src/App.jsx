@@ -12,7 +12,7 @@ import {
 import L from "leaflet";
 
 import "leaflet/dist/leaflet.css";
-import "./app.css";
+import "./App.css";
 
 import { db, auth } from "./firebase";
 
