@@ -1,17 +1,11 @@
 
-/* ========================================
-   GOT_TRACK - GLOBAL CSS
-   ======================================== */
-
-/* RESET */
+/* GLOBAL RESET */
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
-
-/* HTML AND BODY */
 
 html {
   width: 100%;
@@ -29,15 +23,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ROOT */
-
 #root {
   width: 100%;
   min-height: 100vh;
   isolation: isolate;
 }
-
-/* INPUTS AND BUTTONS */
 
 input,
 button,
@@ -49,16 +39,6 @@ select {
 button {
   cursor: pointer;
 }
-
-/* DISABLED BUTTONS */
-
-button:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* LINKS */
 
 a {
   color: inherit;
@@ -84,14 +64,14 @@ a {
   background: #475569;
 }
 
-/* SELECTION */
+/* TEXT SELECTION */
 
 ::selection {
   background: #2563eb;
-  color: white;
+  color: #ffffff;
 }
 
-/* LEAFLET MAP FIXES */
+/* LEAFLET MAP */
 
 .leaflet-container {
   background: #e5e7eb;
@@ -107,7 +87,7 @@ a {
   z-index: 800;
 }
 
-/* RESPONSIVE VIEWPORT */
+/* RESPONSIVE */
 
 @media (max-width: 768px) {
   html,
