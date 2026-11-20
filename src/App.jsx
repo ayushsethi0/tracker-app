@@ -1,535 +1,458 @@
-
-import React, { useEffect, useRef, useState } from "react";
+import { useState } from "react"
 
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
-  useMap,
-} from "react-leaflet";
+} from "react-leaflet"
 
-import L from "leaflet";
+import L from "leaflet"
 
-import "leaflet/dist/leaflet.css";
-import "./styles.css";
+import "leaflet/dist/leaflet.css"
 
-import { db, auth } from "./firebase";
+import { db, auth } from "./firebase"
 
 import {
   doc,
   setDoc,
-  onSnapshot,
-  serverTimestamp,
-} from "firebase/firestore";
+  getDoc,
+} from "firebase/firestore"
 
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged,
-} from "firebase/auth";
+} from "firebase/auth"
 
-/* ================================
-   LEAFLET MARKER ICON FIX
-================================ */
-
-delete L.Icon.Default.prototype._getIconUrl;
+// FIX MARKER ICON
+delete L.Icon.Default.prototype._getIconUrl
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+
   iconUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+
   shadowUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
-
-/* ================================
-   MAP POSITION UPDATER
-================================ */
-
-function MapUpdater({ position }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (position) {
-      map.setView(
-        [position.latitude, position.longitude],
-        15
-      );
-    }
-  }, [position, map]);
-
-  return null;
-}
-
-/* ================================
-   MAIN APP
-================================ */
+})
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
 
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [user, setUser] = useState(null)
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // NO DEFAULT LOCATION
+  const [position, setPosition] =
+    useState(null)
 
-  const [position, setPosition] = useState(null);
-  const [friendLocation, setFriendLocation] = useState(null);
+  const [searchEmail, setSearchEmail] =
+    useState("")
 
-  const [friendEmail, setFriendEmail] = useState("");
+  const [friendLocation, setFriendLocation] =
+    useState(null)
 
-  const [isSharing, setIsSharing] = useState(false);
-
-  const watchId = useRef(null);
-  const unsubscribeFriend = useRef(null);
-
-  /* ================================
-     AUTHENTICATION LISTENER
-  ================================ */
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  /* ================================
-     STOP LOCATION SHARING
-  ================================ */
-
-  const stopLocationSharing = () => {
-    if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(watchId.current);
-      watchId.current = null;
-    }
-
-    setIsSharing(false);
-  };
-
-  /* ================================
-     STOP TRACKING FRIEND
-  ================================ */
-
-  const stopTracking = () => {
-    if (unsubscribeFriend.current) {
-      unsubscribeFriend.current();
-      unsubscribeFriend.current = null;
-    }
-
-    setFriendLocation(null);
-  };
-
-  /* ================================
-     CLEANUP ON UNMOUNT
-  ================================ */
-
-  useEffect(() => {
-    return () => {
-      if (watchId.current !== null) {
-        navigator.geolocation.clearWatch(watchId.current);
-      }
-
-      if (unsubscribeFriend.current) {
-        unsubscribeFriend.current();
-      }
-    };
-  }, []);
-
-  /* ================================
-     CREATE ACCOUNT
-  ================================ */
-
-  const handleRegister = async () => {
-    if (!email || !password) {
-      alert("Please enter your email and password.");
-      return;
-    }
-
+  // CREATE ACCOUNT
+  const createAccount = async () => {
     try {
-      await createUserWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
+      const userCredential =
+        await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
 
-      alert("Account created successfully!");
+      setUser(userCredential.user)
+
+      alert("Account Created Successfully")
     } catch (error) {
-      alert(error.message);
+      alert(error.message)
     }
-  };
+  }
 
-  /* ================================
-     LOGIN
-  ================================ */
-
-  const handleLogin = async () => {
-    if (!email || !password) {
-      alert("Please enter your email and password.");
-      return;
-    }
-
+  // LOGIN
+  const login = async () => {
     try {
-      await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
+      const userCredential =
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        )
+
+      setUser(userCredential.user)
+
+      alert("Login Successful")
     } catch (error) {
-      alert(error.message);
+      alert(error.message)
     }
-  };
+  }
 
-  /* ================================
-     LOGOUT
-  ================================ */
+  // LOGOUT
+  const logout = async () => {
+    await signOut(auth)
 
-  const handleLogout = async () => {
-    stopLocationSharing();
-    stopTracking();
+    setUser(null)
+    setPosition(null)
+    setFriendLocation(null)
+  }
 
-    try {
-      await signOut(auth);
-
-      setPosition(null);
-      setFriendEmail("");
-      setEmail("");
-      setPassword("");
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
-  /* ================================
-     SHARE LIVE LOCATION
-  ================================ */
-
+  // SHARE LOCATION
   const getLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
-      return;
-    }
-
-    if (!user) {
-      alert("Please log in first.");
-      return;
-    }
-
-    if (watchId.current !== null) {
-      return;
-    }
-
-    setIsSharing(true);
-
-    watchId.current = navigator.geolocation.watchPosition(
+    navigator.geolocation.watchPosition(
       async (location) => {
-        const latitude = location.coords.latitude;
-        const longitude = location.coords.longitude;
+        const latitude =
+          location.coords.latitude
 
-        const currentPosition = {
+        const longitude =
+          location.coords.longitude
+
+        const coords = [
           latitude,
           longitude,
-        };
+        ]
 
-        setPosition(currentPosition);
+        setPosition(coords)
 
-        try {
-          await setDoc(
-            doc(db, "locations", user.email.toLowerCase()),
-            {
-              email: user.email.toLowerCase(),
-              latitude,
-              longitude,
-              accuracy: location.coords.accuracy,
-              timestamp: serverTimestamp(),
-            }
-          );
-        } catch (error) {
-          console.error("Location update error:", error);
-          alert("Unable to update your location in Firebase.");
-          stopLocationSharing();
-        }
+        await setDoc(
+          doc(db, "locations", user.email),
+          {
+            email: user.email,
+            latitude: latitude,
+            longitude: longitude,
+            updatedAt: new Date(),
+          }
+        )
       },
-
-      (error) => {
-        console.error("Geolocation error:", error);
-
-        alert(
-          "Unable to access your location. Please allow location permission."
-        );
-
-        stopLocationSharing();
-      },
-
-      {
-        enableHighAccuracy: true,
-        maximumAge: 5000,
-        timeout: 15000,
+      () => {
+        alert("Location Permission Denied")
       }
-    );
-  };
-
-  /* ================================
-     TRACK FRIEND
-  ================================ */
-
-  const trackFriend = () => {
-    if (!friendEmail.trim()) {
-      alert("Please enter your friend's email address.");
-      return;
-    }
-
-    if (!user) {
-      alert("Please log in first.");
-      return;
-    }
-
-    const friend = friendEmail.trim().toLowerCase();
-
-    if (friend === user.email.toLowerCase()) {
-      alert("You cannot track your own location using this option.");
-      return;
-    }
-
-    stopTracking();
-
-    const friendRef = doc(db, "locations", friend);
-
-    unsubscribeFriend.current = onSnapshot(
-      friendRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-
-          setFriendLocation({
-            latitude: data.latitude,
-            longitude: data.longitude,
-            email: data.email,
-          });
-        } else {
-          setFriendLocation(null);
-          alert("No location found for this email.");
-        }
-      },
-      (error) => {
-        console.error("Tracking error:", error);
-        alert("Unable to track this user. Please check your access.");
-      }
-    );
-  };
-
-  /* ================================
-     LOADING SCREEN
-  ================================ */
-
-  if (loading) {
-    return (
-      <div className="auth-container">
-        <div className="auth-card">
-          <h2 className="auth-title">Got_Track</h2>
-          <p className="auth-subtitle">Loading...</p>
-        </div>
-      </div>
-    );
+    )
   }
 
-  /* ================================
-     LOGIN / REGISTER SCREEN
-  ================================ */
+  // TRACK FRIEND
+  const trackFriend = async () => {
+    try {
+      const docRef = doc(
+        db,
+        "locations",
+        searchEmail
+      )
 
+      const docSnap = await getDoc(docRef)
+
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+
+        setFriendLocation([
+          data.latitude,
+          data.longitude,
+        ])
+
+        alert("Location Found")
+      } else {
+        alert("No user found")
+      }
+    } catch (error) {
+      alert(error.message)
+    }
+  }
+
+  // LOGIN SCREEN
   if (!user) {
     return (
-      <div className="auth-container">
-        <div className="auth-card">
-          <h1 className="auth-title">Got_Track</h1>
+      <div
+        style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #020617, #0f172a, #1e293b)",
 
-          <p className="auth-subtitle">
-            Stay connected. Share your location.
-          </p>
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          fontFamily: "Arial",
+        }}
+      >
+        <div
+          style={{
+            width: "380px",
+            background: "#071126",
+            padding: "40px",
+            borderRadius: "28px",
 
-          <form onSubmit={(event) => event.preventDefault()}>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-
-            {isRegistering ? (
-              <button
-                type="button"
-                className="create-account-btn"
-                onClick={handleRegister}
-              >
-                Create Account
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="login-btn"
-                onClick={handleLogin}
-              >
-                Login
-              </button>
-            )}
-          </form>
-
-          <div className="auth-switch">
-            {isRegistering
-              ? "Already have an account?"
-              : "Don't have an account?"}
-
-            <button
-              type="button"
-              onClick={() => setIsRegistering(!isRegistering)}
-            >
-              {isRegistering ? "Login" : "Sign Up"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ================================
-     MAIN DASHBOARD
-  ================================ */
-
-  const mapPosition = position || friendLocation;
-
-  return (
-    <div className="dashboard">
-      <header className="top-bar">
-        <div>
-          <h1 className="app-title">Got_Track</h1>
-          <p className="user-email">{user.email}</p>
-        </div>
-
-        <div className="header-actions">
-          <button
-            className="share-btn"
-            onClick={getLocation}
-            disabled={isSharing}
+            boxShadow:
+              "0 0 40px rgba(0,0,0,0.5)",
+          }}
+        >
+          <h1
+            style={{
+              color: "white",
+              textAlign: "center",
+              fontSize: "48px",
+              marginBottom: "35px",
+              fontWeight: "bold",
+            }}
           >
-            {isSharing ? "Sharing Location..." : "Share My Location"}
+            TrackTogether
+          </h1>
+
+          <input
+            type="email"
+            placeholder="Enter email"
+            value={email}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "16px",
+              marginBottom: "18px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#111827",
+              color: "white",
+              fontSize: "15px",
+            }}
+          />
+
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "16px",
+              marginBottom: "22px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#111827",
+              color: "white",
+              fontSize: "15px",
+            }}
+          />
+
+          <button
+            onClick={createAccount}
+            style={{
+              width: "100%",
+              padding: "15px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#2563eb",
+              color: "white",
+              fontSize: "16px",
+              fontWeight: "bold",
+              marginBottom: "14px",
+              cursor: "pointer",
+            }}
+          >
+            Create Account
           </button>
 
-          {isSharing && (
-            <button
-              className="logout-btn"
-              onClick={stopLocationSharing}
-            >
-              Stop Sharing
-            </button>
-          )}
+          <button
+            onClick={login}
+            style={{
+              width: "100%",
+              padding: "15px",
+              borderRadius: "14px",
+              border: "none",
+              background: "#16a34a",
+              color: "white",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // MAIN APP
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg, #020617, #0f172a, #1e293b)",
+
+        padding: "30px",
+        fontFamily: "Arial",
+      }}
+    >
+      {/* TOP BAR */}
+      <div
+        style={{
+          width: "90%",
+          margin: "auto",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "25px",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              color: "white",
+              fontSize: "64px",
+              margin: 0,
+              fontWeight: "bold",
+              lineHeight: "65px",
+            }}
+          >
+            TrackTogether
+          </h1>
+
+          <p
+            style={{
+              color: "#94a3b8",
+              marginTop: "10px",
+              fontSize: "16px",
+              marginLeft: "4px",
+            }}
+          >
+            {user.email}
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: "15px",
+          }}
+        >
+          <button
+            onClick={getLocation}
+            style={{
+              padding:
+                "16px 28px",
+              borderRadius: "16px",
+              border: "none",
+              background: "#2563eb",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "15px",
+              cursor: "pointer",
+            }}
+          >
+            Share Location
+          </button>
 
           <button
-            className="logout-btn"
-            onClick={handleLogout}
+            onClick={logout}
+            style={{
+              padding:
+                "16px 28px",
+              borderRadius: "16px",
+              border: "none",
+              background: "#dc2626",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "15px",
+              cursor: "pointer",
+            }}
           >
             Logout
           </button>
         </div>
-      </header>
+      </div>
 
-      <div className="search-container">
+      {/* SEARCH BAR */}
+      <div
+        style={{
+          width: "90%",
+          margin: "auto",
+          marginBottom: "25px",
+          display: "flex",
+          gap: "14px",
+        }}
+      >
         <input
-          type="email"
-          placeholder="Enter friend's email to track location"
-          value={friendEmail}
-          onChange={(event) => setFriendEmail(event.target.value)}
+          type="text"
+          placeholder="Enter friend's email"
+          value={searchEmail}
+          onChange={(e) =>
+            setSearchEmail(e.target.value)
+          }
+          style={{
+            flex: 1,
+            padding: "18px",
+            borderRadius: "16px",
+            border: "none",
+            background: "#111827",
+            color: "white",
+            fontSize: "15px",
+          }}
         />
 
         <button
-          className="track-btn"
           onClick={trackFriend}
+          style={{
+            padding:
+              "18px 30px",
+            borderRadius: "16px",
+            border: "none",
+            background: "#7c3aed",
+            color: "white",
+            fontWeight: "bold",
+            cursor: "pointer",
+          }}
         >
-          Track Friend
+          Track User
         </button>
-
-        {friendLocation && (
-          <button
-            className="logout-btn"
-            onClick={stopTracking}
-          >
-            Stop Tracking
-          </button>
-        )}
       </div>
 
-      <div className="map-container">
-        {mapPosition ? (
-          <MapContainer
-            center={[
-              mapPosition.latitude,
-              mapPosition.longitude,
-            ]}
-            zoom={15}
-            scrollWheelZoom={true}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+      {/* MAP */}
+      {position && (
+        <MapContainer
+          center={position}
+          zoom={15}
+          style={{
+            height: "75vh",
+            width: "90%",
+            margin: "auto",
+            borderRadius: "28px",
+            overflow: "hidden",
 
-            <MapUpdater position={mapPosition} />
+            boxShadow:
+              "0 0 40px rgba(0,0,0,0.4)",
+          }}
+        >
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
 
-            {position && (
-              <Marker
-                position={[
-                  position.latitude,
-                  position.longitude,
-                ]}
-              >
-                <Popup>
-                  Your Location
-                </Popup>
-              </Marker>
-            )}
+          {/* YOUR LOCATION */}
+          <Marker position={position}>
+            <Popup>
+              Your Live Location
+            </Popup>
+          </Marker>
 
-            {friendLocation && (
-              <Marker
-                position={[
-                  friendLocation.latitude,
-                  friendLocation.longitude,
-                ]}
-              >
-                <Popup>
-                  {friendLocation.email || "Friend's Location"}
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
-        ) : (
-          <div className="map-message">
-            Share your location or track a friend to view the map.
-          </div>
-        )}
-      </div>
-
-      <div className="location-status">
-        {isSharing
-          ? "Your live location is being shared."
-          : "Your location is not currently being shared."}
-      </div>
+          {/* FRIEND LOCATION */}
+          {friendLocation && (
+            <Marker
+              position={friendLocation}
+            >
+              <Popup>
+                {searchEmail}
+              </Popup>
+            </Marker>
+          )}
+        </MapContainer>
+      )}
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
