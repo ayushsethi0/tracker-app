@@ -1,36 +1,25 @@
-import { initializeApp } from "firebase/app"
 
-import {
-  getFirestore
-} from "firebase/firestore"
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-import {
-  getAuth
-} from "firebase/auth"
-
-
+// Firebase Configuration
 const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
-  apiKey: "AIzaSyA1US56-eOd8jNdWyIoJ_rOiGzCY6TSWkA",
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
-  authDomain: "tracktogether-6d840.firebaseapp.com",
+// Initialize Authentication
+const auth = getAuth(app);
 
-  projectId: "tracktogether-6d840",
+// Initialize Firestore Database
+const db = getFirestore(app);
 
-  storageBucket: "tracktogether-6d840.firebasestorage.app",
-
-  messagingSenderId: "1001190578227",
-
-  appId: "1:1001190578227:web:3d27ec5a789e98f1f06b46",
-
-  measurementId: "G-D6SXR5FYSG"
-}
-
-
-const app = initializeApp(firebaseConfig)
-
-const db = getFirestore(app)
-
-const auth = getAuth(app)
-
-export { db, auth }
+export { app, auth, db };
